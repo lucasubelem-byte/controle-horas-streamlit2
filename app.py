@@ -1,9 +1,21 @@
-import streamlit as st
-import gspread
-from google.oauth2.service_account import Credentials
-from datetime import datetime
-import secrets
 import json
+from google.oauth2.service_account import Credentials
+import gspread
+import streamlit as st
+
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+
+creds_dict = json.loads(st.secrets["GOOGLE_SHEETS_CREDS"])
+creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+client = gspread.authorize(creds)
+
+
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+
+creds_dict = json.loads(st.secrets["GOOGLE_SHEETS_CREDS"])
+creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+client = gspread.authorize(creds)
+
 
 st.set_page_config(page_title="Controle de Horas", page_icon="⏰", layout="centered")
 
