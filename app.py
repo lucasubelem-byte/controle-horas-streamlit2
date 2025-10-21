@@ -2,27 +2,25 @@ import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
-import json
 import secrets
 
 # --- CONFIGURAÇÃO ---
 st.set_page_config(page_title="Controle de Horas", page_icon="⏰", layout="centered")
 
 # --- AUTENTICAÇÃO COM GOOGLE SHEETS ---
-creds_dict = json.loads(st.secrets["GOOGLE_SHEETS_CREDS"])
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+creds = Credentials.from_service_account_file("chave.json", scopes=SCOPES)
 client = gspread.authorize(creds)
-sheet_id = st.secrets["SHEET_ID"]
-
-# Planilhas (abas)
-sheet_horas = client.open_by_key(sheet_id).worksheet("Horas")
-sheet_senhas = client.open_by_key(sheet_id).worksheet("Senhas")
-sheet_faltas = client.open_by_key(sheet_id).worksheet("Faltas")
 
 # --- CONFIGURAÇÕES ---
+SHEET_ID = st.secrets.get("SHEET_ID", "1cnCtIfxbyceqh4co3H0D21vwTwczvHK2nrsExrUY7K0")
 SENHA_MESTRA = st.secrets.get("MASTER_PW", "1b1m")
 dias_semana_valores = {0:5,1:5,2:5,3:5,4:5,5:4,6:0}  # Segunda=0, Domingo=6
+
+# --- PLANILHAS ---
+sheet_horas = client.open_by_key(SHEET_ID).worksheet("Horas")
+sheet_senhas = client.open_by_key(SHEET_ID).worksheet("Senhas")
+sheet_faltas = client.open_by_key(SHEET_ID).worksheet("Faltas")
 
 # --- FUNÇÕES AUXILIARES ---
 def carregar_horas():
@@ -183,32 +181,31 @@ elif menu == "Histórico de faltas":
     st.subheader("🗓 Histórico de faltas")
     faltas = sheet_faltas.get_all_records()
     if faltas:
-        for row in faltas:
-            st.write(f"{row['Nome']} - {row['Data']} - {row['Horas']}h")
+        for f in faltas:
+            st.write(f"{f['Nome']} — {f['Data']} — {f['Horas']}h")
     else:
-        st.info("Nenhuma falta registrada.")
+        st.info("Nenhuma falta registrada ainda.")
 
-# GERENCIAR NOMES (ADMIN)
+# GERENCIAR NOMES
 elif menu == "Gerenciar nomes/segurança":
-    st.subheader("⚙️ Gerenciar nomes e senhas (senha mestra necessária)")
-    senha_mestra = st.text_input("Digite a senha mestra:", type="password")
-    if senha_mestra == SENHA_MESTRA:
-        st.write("### Adicionar nome")
-        novo_nome = st.text_input("Nome para adicionar:")
-        if st.button("Adicionar nome"):
-            sucesso, msg = adicionar_nome(novo_nome)
-            if sucesso:
-                st.success(msg)
-            else:
-                st.error(msg)
-
-        st.write("### Remover nome")
-        nome_remover = st.selectbox("Escolha o nome para remover:", list(horas_devidas.keys()))
-        if st.button("Remover nome"):
-            sucesso, msg = remover_nome(nome_remover)
-            if sucesso:
-                st.success(msg)
-            else:
-                st.error(msg)
-    elif senha_mestra:
+    st.subheader("⚙️ Gerenciar nomes (senha mestra necessária)")
+    senha = st.text_input("Digite a senha mestra:", type="password", key="gerenciar_nomes")
+    if senha == SENHA_MESTRA:
+        nova_acao = st.radio("Ação:", ["Adicionar nome", "Remover nome"])
+        if nova_acao == "Adicionar nome":
+            nome_novo = st.text_input("Digite o nome do novo funcionário:")
+            senha_inicial = st.text_input("Senha inicial:", type="password", value="senha123")
+            if st.button("Adicionar"):
+                sucesso, msg = adicionar_nome(nome_novo, senha_inicial)
+                if sucesso:
+                    st.success(msg)
+                else:
+                    st.error(msg)
+        else:
+            nome_remover = st.selectbox("Escolha o nome a remover:", list(horas_devidas.keys()))
+            if st.button("Remover"):
+                sucesso, msg = remover_nome(nome_remover)
+                if sucesso:
+                    st.success(msg)
+    elif senha:
         st.error("Senha mestra incorreta!")
