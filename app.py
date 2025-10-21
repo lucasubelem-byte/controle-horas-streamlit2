@@ -180,4 +180,35 @@ elif menu == "Alterar senhas (usuário)":
 
 # HISTÓRICO DE FALTAS
 elif menu == "Histórico de faltas":
-    st.subheader("🗓 Histórico de
+    st.subheader("🗓 Histórico de faltas")
+    faltas = sheet_faltas.get_all_records()
+    if faltas:
+        for row in faltas:
+            st.write(f"{row['Nome']} - {row['Data']} - {row['Horas']}h")
+    else:
+        st.info("Nenhuma falta registrada.")
+
+# GERENCIAR NOMES (ADMIN)
+elif menu == "Gerenciar nomes/segurança":
+    st.subheader("⚙️ Gerenciar nomes e senhas (senha mestra necessária)")
+    senha_mestra = st.text_input("Digite a senha mestra:", type="password")
+    if senha_mestra == SENHA_MESTRA:
+        st.write("### Adicionar nome")
+        novo_nome = st.text_input("Nome para adicionar:")
+        if st.button("Adicionar nome"):
+            sucesso, msg = adicionar_nome(novo_nome)
+            if sucesso:
+                st.success(msg)
+            else:
+                st.error(msg)
+
+        st.write("### Remover nome")
+        nome_remover = st.selectbox("Escolha o nome para remover:", list(horas_devidas.keys()))
+        if st.button("Remover nome"):
+            sucesso, msg = remover_nome(nome_remover)
+            if sucesso:
+                st.success(msg)
+            else:
+                st.error(msg)
+    elif senha_mestra:
+        st.error("Senha mestra incorreta!")
