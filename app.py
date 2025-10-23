@@ -1,224 +1,137 @@
-import json
-from google.oauth2.service_account import Credentials
-import gspread
 import streamlit as st
+import json
+import os
+from datetime import datetime
 
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+# Caminho do arquivo JSON para armazenar dados
+ARQUIVO_DADOS = "dados.json"
 
-creds_dict = json.loads(st.secrets["GOOGLE_SHEETS_CREDS"])
-creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
-client = gspread.authorize(creds)
+# Senha mestre fixa
+SENHA_MESTRE = "1b1m"
 
+# Funções auxiliares
+def carregar_dados():
+    if not os.path.exists(ARQUIVO_DADOS):
+        return {"usuarios": {}, "historico": []}
+    with open(ARQUIVO_DADOS, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+def salvar_dados(dados):
+    with open(ARQUIVO_DADOS, "w", encoding="utf-8") as f:
+        json.dump(dados, f, ensure_ascii=False, indent=4)
 
-creds_dict = json.loads(st.secrets["GOOGLE_SHEETS_CREDS"])
-creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
-client = gspread.authorize(creds)
-
-
+# Interface principal
 st.set_page_config(page_title="Controle de Horas", page_icon="⏰", layout="centered")
+st.title("⏰ Controle de Horas Devidas")
 
-# -----------------------
-# CONFIGURAÇÃO GOOGLE SHEETS
-# -----------------------
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+dados = carregar_dados()
 
-# --- Opção 1: Usar Streamlit Secrets (recomendado) ---
-creds_dict = json.loads(st.secrets["GOOGLE_SHEETS_CREDS"])
-creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
-client = gspread.authorize(creds)
+aba = st.sidebar.selectbox("Escolha uma opção:", ["Visualizar horas", "Área do Administrador"])
 
-# --- Configurações principais ---
-SHEET_ID = st.secrets["SHEET_ID"]
-SENHA_MESTRA = st.secrets["MASTER_PW"]
-dias_semana_valores = {0:5,1:5,2:5,3:5,4:5,5:4,6:0}  # Segunda=0, Domingo=6
+# -------------------------------------------------
+# VISUALIZAR HORAS
+# -------------------------------------------------
+if aba == "Visualizar horas":
+    st.header("👀 Ver horas devidas")
 
-# --- Conecta abas do Google Sheets ---
-sheet_horas = client.open_by_key(SHEET_ID).worksheet("Horas")
-sheet_senhas = client.open_by_key(SHEET_ID).worksheet("Senhas")
-sheet_faltas = client.open_by_key(SHEET_ID).worksheet("Faltas")
+    if len(dados["usuarios"]) == 0:
+        st.warning("Nenhum usuário cadastrado ainda.")
+    else:
+        nome = st.selectbox("Selecione seu nome:", list(dados["usuarios"].keys()))
+        horas = dados["usuarios"][nome]["horas"]
+        st.metric(label=f"Horas devidas por {nome}", value=f"{horas}h")
 
-# -----------------------
-# FUNÇÕES AUXILIARES
-# -----------------------
-def carregar_horas():
-    data = sheet_horas.get_all_records()
-    return {row['Nome']: int(row['Horas devidas']) for row in data}
+    st.subheader("📜 Histórico de alterações")
+    if len(dados["historico"]) == 0:
+        st.info("Nenhuma alteração registrada ainda.")
+    else:
+        for h in reversed(dados["historico"][-15:]):  # Mostra os 15 últimos
+            st.write(f"📅 **{h['data']}** - {h['acao']} **{h['nome']}** → {h['horas']}h")
 
-def carregar_senhas():
-    data = sheet_senhas.get_all_records()
-    return {row['Nome']: row['Senha'] for row in data}
+# -------------------------------------------------
+# ÁREA DO ADMINISTRADOR
+# -------------------------------------------------
+elif aba == "Área do Administrador":
+    st.header("🔐 Área do Administrador")
+    senha = st.text_input("Digite a senha mestre:", type="password")
 
-def atualizar_horas(nome, horas):
-    data = sheet_horas.get_all_records()
-    for i, row in enumerate(data, start=2):
-        if row['Nome'] == nome:
-            nova_hora = int(row['Horas devidas']) + int(horas)
-            sheet_horas.update_cell(i, 2, nova_hora)
-            return
-    sheet_horas.append_row([nome, int(horas)])
+    if senha == SENHA_MESTRE:
+        opcao = st.selectbox("Escolha uma ação:", [
+            "Adicionar horas",
+            "Remover horas",
+            "Adicionar usuário",
+            "Remover usuário"
+        ])
 
-def remover_horas(nome, horas):
-    data = sheet_horas.get_all_records()
-    for i, row in enumerate(data, start=2):
-        if row['Nome'] == nome:
-            nova_hora = max(0, int(row['Horas devidas']) - int(horas))
-            sheet_horas.update_cell(i, 2, nova_hora)
-            return
-
-def registrar_falta(nome, data_falta, horas):
-    sheet_faltas.append_row([nome, data_falta.strftime("%d/%m/%Y"), int(horas)])
-
-def alterar_senha_sheet(nome, nova_senha):
-    data = sheet_senhas.get_all_records()
-    for i, row in enumerate(data, start=2):
-        if row['Nome'] == nome:
-            sheet_senhas.update_cell(i, 2, nova_senha)
-            return
-    sheet_senhas.append_row([nome, nova_senha])
-
-def adicionar_nome(nome, senha_inicial="novaSenha123"):
-    nomes = list(carregar_horas().keys())
-    if nome in nomes:
-        return False, "Nome já existe."
-    sheet_horas.append_row([nome, 0])
-    sheet_senhas.append_row([nome, senha_inicial])
-    return True, "Nome adicionado com sucesso."
-
-def remover_nome(nome):
-    data_h = sheet_horas.get_all_records()
-    for i, row in enumerate(data_h, start=2):
-        if row['Nome'] == nome:
-            sheet_horas.delete_row(i)
-            break
-    data_s = sheet_senhas.get_all_records()
-    for i, row in enumerate(data_s, start=2):
-        if row['Nome'] == nome:
-            sheet_senhas.delete_row(i)
-            break
-    faltas = sheet_faltas.get_all_records()
-    restantes = [[r['Nome'], r['Data'], r['Horas']] for r in faltas if r['Nome'] != nome]
-    sheet_faltas.clear()
-    sheet_faltas.append_row(["Nome", "Data", "Horas"])
-    if restantes:
-        sheet_faltas.append_rows(restantes)
-    return True, "Nome removido com sucesso."
-
-def gerar_senha_aleatoria(n_bytes=6):
-    return secrets.token_urlsafe(n_bytes)
-
-# -----------------------
-# INTERFACE
-# -----------------------
-st.title("⏰ Controle de Horas Devidas (Admin Friendly)")
-
-menu = st.radio("Menu", ["Adicionar horas", "Ver total de horas", "Remover horas", 
-                         "Alterar senhas (usuário)", "Histórico de faltas", "Gerenciar nomes/segurança"])
-
-horas_devidas = carregar_horas()
-senhas_individuais = carregar_senhas()
-
-# Adicionar horas
-if menu == "Adicionar horas":
-    st.subheader("➕ Adicionar horas (senha individual necessária)")
-    nome = st.selectbox("Escolha o nome:", list(horas_devidas.keys()))
-    senha = st.text_input("Digite a senha do nome selecionado:", type="password")
-    if senha == senhas_individuais.get(nome, ""):
-        data_falta = st.date_input("Escolha a data da falta:")
-        if st.button("Adicionar horas"):
-            dia_semana = data_falta.weekday()
-            horas = dias_semana_valores.get(dia_semana, 0)
-            if horas == 0:
-                st.warning("Data selecionada é domingo — não adiciona horas.")
+        # ---------------------------------------
+        # ADICIONAR HORAS
+        # ---------------------------------------
+        if opcao == "Adicionar horas":
+            if len(dados["usuarios"]) == 0:
+                st.warning("Nenhum usuário cadastrado ainda.")
             else:
-                atualizar_horas(nome, horas)
-                registrar_falta(nome, data_falta, horas)
-                st.success(f"{nome} teve adicionadas {horas}h no dia {data_falta.strftime('%d/%m/%Y')}")
-    elif senha:
-        st.error("Senha incorreta!")
+                nome = st.selectbox("Selecione o funcionário:", list(dados["usuarios"].keys()))
+                dia = st.date_input("Dia da falta:")
+                horas_add = st.number_input("Quantas horas deseja adicionar?", min_value=0.5, step=0.5)
+                if st.button("✅ Confirmar adição"):
+                    dados["usuarios"][nome]["horas"] += horas_add
+                    dados["historico"].append({
+                        "data": str(dia),
+                        "acao": "Adicionadas horas a",
+                        "nome": nome,
+                        "horas": horas_add
+                    })
+                    salvar_dados(dados)
+                    st.success(f"{horas_add}h adicionadas a {nome} ({dia}).")
 
-# Ver total
-elif menu == "Ver total de horas":
-    st.subheader("📊 Total de horas devidas")
-    for nome, total in horas_devidas.items():
-        st.write(f"**{nome}:** {total} horas")
+        # ---------------------------------------
+        # REMOVER HORAS
+        # ---------------------------------------
+        elif opcao == "Remover horas":
+            if len(dados["usuarios"]) == 0:
+                st.warning("Nenhum usuário cadastrado ainda.")
+            else:
+                nome = st.selectbox("Selecione o funcionário:", list(dados["usuarios"].keys()))
+                dia = st.date_input("Dia da correção:")
+                horas_rem = st.number_input("Quantas horas deseja remover?", min_value=0.5, step=0.5)
+                if st.button("❌ Confirmar remoção"):
+                    dados["usuarios"][nome]["horas"] = max(0, dados["usuarios"][nome]["horas"] - horas_rem)
+                    dados["historico"].append({
+                        "data": str(dia),
+                        "acao": "Removidas horas de",
+                        "nome": nome,
+                        "horas": horas_rem
+                    })
+                    salvar_dados(dados)
+                    st.success(f"{horas_rem}h removidas de {nome} ({dia}).")
 
-# Remover horas
-elif menu == "Remover horas":
-    st.subheader("🔐 Remover horas (senha mestra necessária)")
-    senha = st.text_input("Digite a senha mestra:", type="password")
-    if senha == SENHA_MESTRA:
-        nome = st.selectbox("Escolha o nome:", list(horas_devidas.keys()))
-        horas = st.number_input("Quantas horas deseja remover?", min_value=1, step=1)
-        if st.button("Remover horas"):
-            remover_horas(nome, horas)
-            st.success(f"Removidas {horas}h de {nome}")
-    elif senha:
-        st.error("Senha mestra incorreta!")
-
-# Alterar senhas
-elif menu == "Alterar senhas (usuário)":
-    st.subheader("🔑 Alterar senha individual (usuário ou admin)")
-    modo = st.radio("Modo:", ["Alterar com senha atual do usuário", "Alterar como admin (senha mestra)"])
-    if modo == "Alterar com senha atual do usuário":
-        nome = st.selectbox("Escolha o nome:", list(senhas_individuais.keys()))
-        senha_atual = st.text_input("Digite a senha atual do usuário:", type="password")
-        if senha_atual == senhas_individuais.get(nome, ""):
-            nova_senha = st.text_input("Digite a nova senha:", type="password", key="nova_senha_user")
-            if st.button("Alterar minha senha"):
-                alterar_senha_sheet(nome, nova_senha)
-                st.success(f"Senha de {nome} alterada com sucesso.")
-        elif senha_atual:
-            st.error("Senha atual incorreta.")
-    else:
-        senha_mestra = st.text_input("Digite a senha mestra:", type="password", key="alterar_com_mestra")
-        if senha_mestra == SENHA_MESTRA:
-            nome = st.selectbox("Escolha o nome para alterar a senha:", list(senhas_individuais.keys()))
-            nova_senha_manual = st.text_input("Senha manual:", type="password")
-            if st.button("Definir senha manual"):
-                if nova_senha_manual.strip():
-                    alterar_senha_sheet(nome, nova_senha_manual.strip())
-                    st.success(f"Senha de {nome} definida manualmente.")
+        # ---------------------------------------
+        # ADICIONAR USUÁRIO
+        # ---------------------------------------
+        elif opcao == "Adicionar usuário":
+            novo_nome = st.text_input("Digite o nome do novo funcionário:")
+            if st.button("➕ Adicionar"):
+                if novo_nome.strip() == "":
+                    st.warning("Digite um nome válido.")
+                elif novo_nome in dados["usuarios"]:
+                    st.warning("Esse nome já está cadastrado.")
                 else:
-                    st.error("Senha inválida.")
-            if st.button("Gerar senha aleatória"):
-                senha_gerada = gerar_senha_aleatoria()
-                alterar_senha_sheet(nome, senha_gerada)
-                st.success(f"Senha de {nome} alterada para: {senha_gerada}")
-        elif senha_mestra:
-            st.error("Senha mestra incorreta!")
+                    dados["usuarios"][novo_nome] = {"horas": 0}
+                    salvar_dados(dados)
+                    st.success(f"{novo_nome} adicionado com sucesso.")
 
-# Histórico de faltas
-elif menu == "Histórico de faltas":
-    st.subheader("🗓 Histórico de faltas")
-    faltas = sheet_faltas.get_all_records()
-    if faltas:
-        for f in faltas:
-            st.write(f"{f['Nome']} — {f['Data']} — {f['Horas']}h")
-    else:
-        st.info("Nenhuma falta registrada ainda.")
+        # ---------------------------------------
+        # REMOVER USUÁRIO
+        # ---------------------------------------
+        elif opcao == "Remover usuário":
+            if len(dados["usuarios"]) == 0:
+                st.warning("Nenhum usuário cadastrado ainda.")
+            else:
+                nome_remover = st.selectbox("Selecione o funcionário a remover:", list(dados["usuarios"].keys()))
+                if st.button("🗑️ Remover"):
+                    del dados["usuarios"][nome_remover]
+                    salvar_dados(dados)
+                    st.success(f"{nome_remover} removido com sucesso.")
 
-# Gerenciar nomes
-elif menu == "Gerenciar nomes/segurança":
-    st.subheader("⚙️ Gerenciar nomes (senha mestra necessária)")
-    senha = st.text_input("Digite a senha mestra:", type="password", key="gerenciar_nomes")
-    if senha == SENHA_MESTRA:
-        nova_acao = st.radio("Ação:", ["Adicionar nome", "Remover nome"])
-        if nova_acao == "Adicionar nome":
-            nome_novo = st.text_input("Digite o nome do novo funcionário:")
-            senha_inicial = st.text_input("Senha inicial:", type="password", value="senha123")
-            if st.button("Adicionar"):
-                sucesso, msg = adicionar_nome(nome_novo, senha_inicial)
-                if sucesso:
-                    st.success(msg)
-                else:
-                    st.error(msg)
-        else:
-            nome_remover = st.selectbox("Escolha o nome a remover:", list(horas_devidas.keys()))
-            if st.button("Remover"):
-                sucesso, msg = remover_nome(nome_remover)
-                if sucesso:
-                    st.success(msg)
-    elif senha:
-        st.error("Senha mestra incorreta!")
+    elif senha != "":
+        st.error("Senha incorreta.")
