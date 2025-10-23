@@ -1,3 +1,12 @@
-streamlit
-gspread
-google-auth
+{
+    "Lucas Uva": {"senha": "lu123", "horas": [], "faltas": []},
+    "Luis": {"senha": "lu1", "horas": [], "faltas": []},
+    "Matheus": {"senha": "ma123", "horas": [], "faltas": []},
+    "Raphaela": {"senha": "ra123", "horas": [], "faltas": []},
+    "Ralf": {"senha": "ra1", "horas": [], "faltas": []},
+    "Julia": {"senha": "ju1", "horas": [], "faltas": []},
+    "Withyna": {"senha": "wi1", "horas": [], "faltas": []},
+    "Melissa": {"senha": "me1", "horas": [], "faltas": []},
+    "Ana": {"senha": "an1", "horas": [], "faltas": []},
+    "Leandro": {"senha": "le1", "horas": [], "faltas": []}
+}
