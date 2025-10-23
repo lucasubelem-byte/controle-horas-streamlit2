@@ -4,7 +4,7 @@ import os
 from datetime import date
 
 ARQUIVO_DADOS = "dados.json"
-SENHA_ADMIN = "1234"  # senha mestre
+SENHA_ADMIN = "1b1m"  # senha mestre
 
 # ========== FUNÇÕES DE DADOS ==========
 
