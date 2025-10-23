@@ -1,95 +1,146 @@
 import streamlit as st
+from datetime import datetime
 import json
 import os
-from datetime import datetime
 
-# Caminho do arquivo JSON
+st.set_page_config(page_title="Controle de Horas", layout="wide")
+
+# ===== Senha mestra =====
+senha_mestra = "1b1m"
+
+# ===== Arquivo JSON =====
 ARQUIVO_DADOS = "dados.json"
 
-# Função para carregar dados
-def carregar_dados():
-    if os.path.exists(ARQUIVO_DADOS):
-        with open(ARQUIVO_DADOS, "r") as f:
-            return json.load(f)
-    else:
-        return {}
+# Carregar dados do JSON
+if os.path.exists(ARQUIVO_DADOS):
+    with open(ARQUIVO_DADOS, "r") as f:
+        usuarios = json.load(f)
+else:
+    usuarios = {
+        "Lucas Uva": {"horas": [], "faltas": []},
+        "Luis": {"horas": [], "faltas": []},
+        "Matheus": {"horas": [], "faltas": []},
+        "Raphaela": {"horas": [], "faltas": []},
+        "Ralf": {"horas": [], "faltas": []},
+        "Julia": {"horas": [], "faltas": []},
+        "Withyna": {"horas": [], "faltas": []},
+        "Melissa": {"horas": [], "faltas": []},
+        "Ana": {"horas": [], "faltas": []},
+        "Leandro": {"horas": [], "faltas": []},
+    }
 
-# Função para salvar dados
-def salvar_dados(dados):
+# Função para salvar JSON
+def salvar_dados():
     with open(ARQUIVO_DADOS, "w") as f:
-        json.dump(dados, f, indent=4)
+        json.dump(usuarios, f, indent=4)
 
-# Carrega os dados ao iniciar
-dados = carregar_dados()
-
-st.title("⏰ Controle de Horas Devidas")
-
-# Seção de visualização
-st.header("🔍 Visualizar Horas e Faltas")
-nome = st.selectbox("Selecione seu nome:", list(dados.keys()))
-
-if nome:
-    horas = dados[nome].get("horas", [])
-    faltas = dados[nome].get("faltas", [])
-    total_horas = sum(h["quantidade"] for h in horas)
-
-    st.subheader(f"👤 {nome}")
-    st.write(f"**Total de horas devidas:** {total_horas} horas")
-
-    if horas:
-        st.write("### 📅 Histórico de Horas")
-        for h in horas:
-            st.write(f"- {h['dia']}: {h['quantidade']}h")
-    else:
-        st.info("Nenhuma hora registrada.")
-
-    if faltas:
-        st.write("### ⚠️ Faltas Registradas")
-        for f in faltas:
-            st.write(f"- {f}")
-    else:
-        st.info("Nenhuma falta registrada.")
-
-st.divider()
-
-# Seção de administração
-st.header("🔐 Área do Administrador")
-
-senha_admin = st.text_input("Digite a senha de administrador:", type="password")
-
-if senha_admin == "1b1m":
-    st.success("Acesso concedido!")
-
-    opcao = st.radio("Escolha uma ação:", ["Adicionar horas", "Remover horas"])
-
-    if opcao == "Adicionar horas":
-        nome_alvo = st.selectbox("Selecione o usuário:", list(dados.keys()), key="add_user")
-        dia = st.text_input("Dia (ex: 23/10/2025):", value=datetime.now().strftime("%d/%m/%Y"))
-        horas_adicionar = st.number_input("Quantidade de horas a adicionar:", min_value=0.0, step=0.5)
-
+# ===== Funções =====
+def adicionar_horas_admin():
+    st.subheader("🔒 Adicionar horas (Admin)")
+    senha = st.text_input("Senha mestra:", type="password", key="senha_add_admin")
+    if senha == senha_mestra:
+        nome = st.selectbox("Escolha o usuário:", list(usuarios.keys()))
+        dia = st.date_input("Escolha o dia da falta", key="data_add")
+        dia_str = dia.strftime("%d/%m/%Y")
+        horas_adicionar = st.number_input(
+            "Quantidade de horas a adicionar:",
+            min_value=0,
+            step=1,
+            format="%d",
+        )
         if st.button("✅ Confirmar adição"):
             if horas_adicionar > 0:
-                dados[nome_alvo]["horas"].append({"dia": dia, "quantidade": horas_adicionar})
-                salvar_dados(dados)
-                st.success(f"{horas_adicionar}h adicionadas para {nome_alvo} no dia {dia}.")
+                usuarios[nome]["horas"].append(horas_adicionar)
+                usuarios[nome]["faltas"].append(dia_str)
+                salvar_dados()
+                st.success(f"{horas_adicionar} horas adicionadas para {nome} no dia {dia_str}")
             else:
                 st.warning("Digite uma quantidade válida de horas.")
+    elif senha:
+        st.error("Senha mestra incorreta!")
 
-    elif opcao == "Remover horas":
-        nome_alvo = st.selectbox("Selecione o usuário:", list(dados.keys()), key="remove_user")
-
-        if len(dados[nome_alvo]["horas"]) == 0:
-            st.info("Nenhuma hora para remover.")
+def remover_horas_admin():
+    st.subheader("🔒 Remover horas (Admin)")
+    senha = st.text_input("Senha mestra:", type="password", key="senha_rem_admin")
+    if senha == senha_mestra:
+        nome = st.selectbox("Escolha o usuário:", list(usuarios.keys()))
+        if usuarios[nome]["horas"]:
+            total_horas = sum(usuarios[nome]["horas"])
+            qtd = st.number_input(
+                f"Quantas horas deseja remover? (Total: {total_horas})",
+                min_value=1,
+                max_value=total_horas,
+                step=1,
+                format="%d",
+            )
+            if st.button("🗑 Remover horas"):
+                restante = qtd
+                while restante > 0 and usuarios[nome]["horas"]:
+                    if usuarios[nome]["horas"][-1] <= restante:
+                        restante -= usuarios[nome]["horas"][-1]
+                        usuarios[nome]["horas"].pop()
+                        usuarios[nome]["faltas"].pop()
+                    else:
+                        usuarios[nome]["horas"][-1] -= restante
+                        restante = 0
+                salvar_dados()
+                st.success(f"{qtd} horas removidas de {nome}")
         else:
-            horas_list = [f"{h['dia']} - {h['quantidade']}h" for h in dados[nome_alvo]["horas"]]
-            hora_remover = st.selectbox("Selecione a hora a remover:", horas_list)
+            st.warning("Esse usuário não possui horas a remover.")
+    elif senha:
+        st.error("Senha mestra incorreta!")
 
-            if st.button("🗑 Remover hora selecionada"):
-                indice = horas_list.index(hora_remover)
-                removida = dados[nome_alvo]["horas"].pop(indice)
-                salvar_dados(dados)
-                st.success(f"Removida {removida['quantidade']}h de {nome_alvo} ({removida['dia']}).")
+def ver_horas():
+    st.subheader("📊 Horas devidas")
+    for nome, dados in usuarios.items():
+        with st.expander(f"{nome} - {sum(dados['horas'])} horas"):
+            if dados["faltas"]:
+                for dia, h in zip(dados["faltas"], dados["horas"]):
+                    st.write(f"{dia}: {int(h)} horas")
+            else:
+                st.write("Nenhuma falta registrada.")
+
+def admin_panel():
+    st.subheader("🔒 Painel Admin")
+    senha = st.text_input("Senha mestra:", type="password", key="senha_admin")
+    if senha == senha_mestra:
+        op = st.selectbox("Escolha a operação:", ["Adicionar usuário", "Remover usuário"])
+        
+        if op == "Adicionar usuário":
+            nome_novo = st.text_input("Nome do novo usuário")
+            if st.button("Adicionar"):
+                if nome_novo and nome_novo not in usuarios:
+                    usuarios[nome_novo] = {"horas": [], "faltas": []}
+                    salvar_dados()
+                    st.success(f"Usuário {nome_novo} adicionado!")
+                else:
+                    st.error("Usuário já existe ou nome inválido.")
+
+        elif op == "Remover usuário":
+            if usuarios:
+                nome_remover = st.selectbox("Escolha o usuário para remover:", list(usuarios.keys()))
+                if st.button("Remover"):
+                    usuarios.pop(nome_remover)
+                    salvar_dados()
+                    st.success(f"Usuário {nome_remover} removido!")
+            else:
+                st.info("Nenhum usuário para remover.")
+    elif senha:
+        st.error("Senha mestra incorreta!")
+
+# ===== Interface Principal =====
+st.title("⏱ Controle de Horas Devidas")
+
+acao = st.radio("Escolha uma ação:", ["Adicionar horas (Admin)", "Remover horas (Admin)", "Ver horas", "Admin"])
+
+if acao == "Adicionar horas (Admin)":
+    adicionar_horas_admin()
+
+elif acao == "Remover horas (Admin)":
+    remover_horas_admin()
+
+elif acao == "Ver horas":
+    ver_horas()
 
 else:
-    if senha_admin != "":
-        st.error("Senha incorreta.")
+    admin_panel()
