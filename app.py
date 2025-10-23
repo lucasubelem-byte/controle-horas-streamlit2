@@ -6,7 +6,7 @@ import os
 st.set_page_config(page_title="Controle de Horas", layout="wide")
 
 # ===== Senha mestra =====
-senha_mestra = "1b1m"
+senha_mestra = "04k05a18e"
 
 # ===== Arquivo JSON =====
 ARQUIVO_DADOS = "dados.json"
